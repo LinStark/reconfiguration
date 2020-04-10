@@ -406,6 +406,7 @@ func isPrivateAddr(err error) bool {
 // TODO: remove addrBook arg since it's now set on the switch
 func (sw *Switch) DialPeersAsync(addrBook AddrBook, peers []string, persistent bool) error {
 	netAddrs, errs := NewNetAddressStrings(peers)
+	fmt.Println("要连接的节点", netAddrs)
 	// only log errors, dial correct addresses
 	for _, err := range errs {
 		sw.Logger.Error("Error in peer's address", "err", err)
@@ -438,6 +439,7 @@ func (sw *Switch) DialPeersAsync(addrBook AddrBook, peers []string, persistent b
 
 	// permute the list, dial them in random order.
 	perm := sw.rng.Perm(len(netAddrs))
+	fmt.Println(perm)
 	for i := 0; i < len(perm); i++ {
 		go func(i int) {
 			j := perm[i]
@@ -471,7 +473,7 @@ func (sw *Switch) DialPeersAsync(addrBook AddrBook, peers []string, persistent b
 // If we're currently dialing this address or it belongs to an existing peer,
 // ErrCurrentlyDialingOrExistingAddress is returned.
 func (sw *Switch) DialPeerWithAddress(addr *NetAddress, persistent bool) error {
-	fmt.Println("ip:",addr.IP)
+	// fmt.Println("ip:",addr.IP)
 	if sw.IsDialingOrExistingAddress(addr) {
 
 		return ErrCurrentlyDialingOrExistingAddress{addr.String()}
@@ -479,7 +481,7 @@ func (sw *Switch) DialPeerWithAddress(addr *NetAddress, persistent bool) error {
 
 	sw.dialing.Set(string(addr.ID), addr)
 	defer sw.dialing.Delete(string(addr.ID))
-	fmt.Println("进来了")
+	// fmt.Println("进来了")
 	return sw.addOutboundPeerWithConfig(addr, sw.config, persistent)
 }
 

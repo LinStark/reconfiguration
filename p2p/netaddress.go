@@ -98,6 +98,7 @@ func NewNetAddressStringWithOptionalID(addr string) (*NetAddress, error) {
 	}
 
 	host, portStr, err := net.SplitHostPort(addrWithoutProtocol)
+	
 	if err != nil {
 		return nil, ErrNetAddressInvalid{addrWithoutProtocol, err}
 	}
@@ -108,6 +109,7 @@ func NewNetAddressStringWithOptionalID(addr string) (*NetAddress, error) {
 	}
 
 	ip := net.ParseIP(host)
+	// fmt.Println("主机",ip,"端口",portStr)
 	if ip == nil {
 		ips, err := net.LookupIP(host)
 		if err != nil {

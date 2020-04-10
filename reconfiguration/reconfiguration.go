@@ -68,7 +68,7 @@ func NewReconfiguration(cs *cs.ConsensusState, l log.Logger, config *config.ReCo
 	ShardCount, _ := strconv.Atoi(config.ShardCount)
 	NodeCount, _ := strconv.Atoi(config.NodeCount)
 	MoveCount, _ := strconv.Atoi(config.MoveCount)
-	fmt.Println("ShardCount", ShardCount, "NodeCount", NodeCount)
+	// fmt.Println("ShardCount", ShardCount, "NodeCount", NodeCount)
 	Re := &Reconfiguration{
 		ShardCount: ShardCount,
 		NodeCount:  NodeCount,
@@ -113,7 +113,7 @@ func (Re *Reconfiguration) ReadNode() {
 	v := []Nodeinfo{}
 	JsonParse.Load("config/data.json", &v)
 	for i := 0; i < len(v); i++ {
-		fmt.Println("i值：", i)
+		// fmt.Println("i值：", i)
 		ShardIndex, _ := strconv.Atoi(v[i].Coordinate)
 		Shard, _ := strconv.Atoi(v[i].ShardName)
 
