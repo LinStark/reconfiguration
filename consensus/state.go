@@ -77,48 +77,48 @@ type ConsensusState struct {
 
 	// config details
 	config        *cfg.ConsensusConfig //共识配置文件
-	privValidator types.PrivValidator // for signing votes
+	privValidator types.PrivValidator  // for signing votes
 
 	// store blocks and commits
 	blockStore sm.BlockStore //保存区块和提交
 
 	// create and execute blocks
-	blockExec *sm.BlockExecutor//产生区块和执行区块
+	blockExec *sm.BlockExecutor //产生区块和执行区块
 
 	// notify us if txs are available
 	txNotifier txNotifier //tx是否可用
 
 	// add evidence to the pool
 	// when it's detected
-	evpool evidencePool//evidence增加凭证
+	evpool evidencePool //evidence增加凭证
 
 	// internal state
-	mtx sync.RWMutex 
+	mtx sync.RWMutex
 	cstypes.RoundState
 	state sm.State // State until height-1.
 
 	// state changes may be triggered by: msgs from peers,
 	// msgs from ourself, or by timeouts
-	peerMsgQueue     chan msgInfo//peer之间消息队列。信息通道，通过这个改变状态。
-	internalMsgQueue chan msgInfo//内部消息队列
-	timeoutTicker    TimeoutTicker//计时器
+	peerMsgQueue     chan msgInfo  //peer之间消息队列。信息通道，通过这个改变状态。
+	internalMsgQueue chan msgInfo  //内部消息队列
+	timeoutTicker    TimeoutTicker //计时器
 
 	// information about about added votes and block parts are written on this channel
 	// so statistics can be computed by reactor
-	statsMsgQueue chan msgInfo//统计消息队列
+	statsMsgQueue chan msgInfo //统计消息队列
 
 	// we use eventBus to trigger msg broadcasts in the reactor,
 	// and to notify external subscribers, eg. through a websocket
-	eventBus *types.EventBus//eventsbus将消息广播。
+	eventBus *types.EventBus //eventsbus将消息广播。
 
 	// a Write-Ahead Log ensures we can recover from any kind of crash
 	// and helps us avoid signing conflicting votes
-	wal          WAL//防着崩溃。
+	wal          WAL  //防着崩溃。
 	replayMode   bool // so we don't log signing errors during replay
 	doWALCatchup bool // determines if we even try to do the catchup
 
 	// for tests where we want to limit the number of transitions the state makes
-	nSteps int//测试
+	nSteps int //测试
 
 	// some functions can be overwritten for testing
 	decideProposal func(height int64, round int)
@@ -134,7 +134,6 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
-
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -170,7 +169,6 @@ func NewConsensusState(
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
-
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
@@ -187,12 +185,14 @@ func NewConsensusState(
 // Public interface
 
 // SetLogger implements Service.
+//设置日志
 func (cs *ConsensusState) SetLogger(l log.Logger) {
 	cs.BaseService.Logger = l
 	cs.timeoutTicker.SetLogger(l)
 }
 
 // SetEventBus sets event bus.
+//设置事件订阅
 func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.eventBus = b
 	cs.blockExec.SetEventBus(b)
@@ -204,12 +204,14 @@ func StateMetrics(metrics *Metrics) StateOption {
 }
 
 // String returns a string.
+//输出基础信息
 func (cs *ConsensusState) String() string {
 	// better not to access shared variables
 	return fmt.Sprintf("ConsensusState") //(H:%v R:%v S:%v", cs.Height, cs.Round, cs.Step)
 }
 
 // GetState returns a copy of the chain state.
+//获取链的副本状态
 func (cs *ConsensusState) GetState() sm.State {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -218,6 +220,7 @@ func (cs *ConsensusState) GetState() sm.State {
 
 // GetLastHeight returns the last height committed.
 // If there were no blocks, returns 0.
+//获取最新提交的区块高度
 func (cs *ConsensusState) GetLastHeight() int64 {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -225,6 +228,7 @@ func (cs *ConsensusState) GetLastHeight() int64 {
 }
 
 // GetRoundState returns a shallow copy of the internal consensus state.
+//获取内部状态的浅拷贝
 func (cs *ConsensusState) GetRoundState() *cstypes.RoundState {
 	cs.mtx.RLock()
 	rs := cs.RoundState // copy
@@ -233,6 +237,7 @@ func (cs *ConsensusState) GetRoundState() *cstypes.RoundState {
 }
 
 // GetRoundStateJSON returns a json of RoundState, marshalled using go-amino.
+//获取json格式的轮次状态
 func (cs *ConsensusState) GetRoundStateJSON() ([]byte, error) {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -240,6 +245,7 @@ func (cs *ConsensusState) GetRoundStateJSON() ([]byte, error) {
 }
 
 // GetRoundStateSimpleJSON returns a json of RoundStateSimple, marshalled using go-amino.
+//获取json格式轮次状态样本
 func (cs *ConsensusState) GetRoundStateSimpleJSON() ([]byte, error) {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -247,6 +253,7 @@ func (cs *ConsensusState) GetRoundStateSimpleJSON() ([]byte, error) {
 }
 
 // GetValidators returns a copy of the current validators.
+//返回现在validator组的副本
 func (cs *ConsensusState) GetValidators() (int64, []*types.Validator) {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -254,6 +261,7 @@ func (cs *ConsensusState) GetValidators() (int64, []*types.Validator) {
 }
 
 // SetPrivValidator sets the private validator account for signing votes.
+//在投票阶段设置私有validator
 func (cs *ConsensusState) SetPrivValidator(priv types.PrivValidator) {
 	cs.mtx.Lock()
 	cs.privValidator = priv
@@ -261,6 +269,7 @@ func (cs *ConsensusState) SetPrivValidator(priv types.PrivValidator) {
 }
 
 // SetTimeoutTicker sets the local timer. It may be useful to overwrite for testing.
+//设置本地计时器，可能对测试有用
 func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()
 	cs.timeoutTicker = timeoutTicker
@@ -268,6 +277,7 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 }
 
 // LoadCommit loads the commit for a given height.
+//给定高度载入提交
 func (cs *ConsensusState) LoadCommit(height int64) *types.Commit {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -345,6 +355,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 
 // timeoutRoutine: receive requests for timeouts on tickChan and fire timeouts on tockChan
 // receiveRoutine: serializes processing of proposoals, block parts, votes; coordinates state transitions
+//开启计时器和开启接收协程
 func (cs *ConsensusState) startRoutines(maxSteps int) {
 	err := cs.timeoutTicker.Start()
 	if err != nil {
@@ -355,6 +366,7 @@ func (cs *ConsensusState) startRoutines(maxSteps int) {
 }
 
 // OnStop implements cmn.Service.
+//关闭计时器和事件订阅
 func (cs *ConsensusState) OnStop() {
 	cs.evsw.Stop()
 	cs.timeoutTicker.Stop()
@@ -364,11 +376,13 @@ func (cs *ConsensusState) OnStop() {
 // Wait waits for the the main routine to return.
 // NOTE: be sure to Stop() the event switch and drain
 // any event channels or this may deadlock
+//等待主协程返回
 func (cs *ConsensusState) Wait() {
 	<-cs.done
 }
 
 // OpenWAL opens a file to log all consensus messages and timeouts for deterministic accountability
+//保证共识的有效性，开启一个日志记录全部共识消息和timeout
 func (cs *ConsensusState) OpenWAL(walFile string) (WAL, error) {
 	wal, err := NewWAL(walFile)
 	if err != nil {
@@ -392,7 +406,7 @@ func (cs *ConsensusState) OpenWAL(walFile string) (WAL, error) {
 // AddVote inputs a vote.
 //就是将选票送入通道。
 func (cs *ConsensusState) AddVote(vote *types.Vote, peerID p2p.ID) (added bool, err error) {
-	
+
 	if peerID == "" {
 		cs.internalMsgQueue <- msgInfo{&VoteMessage{vote}, ""}
 	} else {
@@ -404,6 +418,7 @@ func (cs *ConsensusState) AddVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 }
 
 // SetProposal inputs a proposal.
+//发送提案
 func (cs *ConsensusState) SetProposal(proposal *types.Proposal, peerID p2p.ID) error {
 
 	if peerID == "" {
@@ -447,18 +462,20 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 
 //------------------------------------------------------------
 // internal functions for managing the state
-
+//更新高度
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 }
 
+//更新轮次
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
 	cs.Round = round
 	cs.Step = step
 }
 
 // enterNewRound(height, 0) at cs.StartTime.
+//等待同步
 func (cs *ConsensusState) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
@@ -466,11 +483,13 @@ func (cs *ConsensusState) scheduleRound0(rs *cstypes.RoundState) {
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
+//同步超时
 func (cs *ConsensusState) scheduleTimeout(duration time.Duration, height int64, round int, step cstypes.RoundStepType) {
 	cs.timeoutTicker.ScheduleTimeout(timeoutInfo{duration, height, round, step})
 }
 
 // send a msg into the receiveRoutine regarding our own proposal, block part, or vote
+// 发送信息到读协程可能提案、部分区块、投票信息
 func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 	select {
 	case cs.internalMsgQueue <- mi:
@@ -508,6 +527,7 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 	}
 	cs.LastCommit = lastPrecommits
 }
+
 //
 // Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
@@ -532,7 +552,7 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 	// We don't want to reset e.g. the Votes, but we still want to
 	// signal the new round step, because other services (eg. txNotifier)
 	// depend on having an up-to-date peer state!
-	
+
 	if !cs.state.IsEmpty() && (state.LastBlockHeight <= cs.state.LastBlockHeight) {
 		cs.Logger.Info("Ignoring updateToState()", "newHeight", state.LastBlockHeight+1, "oldHeight", cs.state.LastBlockHeight+1)
 		cs.newStep()
@@ -607,6 +627,7 @@ func (cs *ConsensusState) newStep() {
 // It keeps the RoundState and is the only thing that updates it.
 // Updates (state transitions) happen on timeouts, complete proposals, and 2/3 majorities.
 // ConsensusState must be locked before any internal state is updated.
+// 接受消息队列的数据
 func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 	onExit := func(cs *ConsensusState) {
 		// NOTE: the internalMsgQueue may have signed messages from our
@@ -653,7 +674,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			cs.wal.Write(mi)
 			// handles proposals, block parts, votes
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
-			cs.handleMsg(mi)//处理信息
+			cs.handleMsg(mi) //处理信息
 		case mi = <-cs.internalMsgQueue:
 			cs.wal.WriteSync(mi) // NOTE: fsync
 
@@ -680,6 +701,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 }
 
 // state transitions on complete-proposal, 2/3-any, 2/3-one
+// 处理消息，分类来看提案信息、区块部分信息、投票信息
 func (cs *ConsensusState) handleMsg(mi msgInfo) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -707,6 +729,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
+		// 添加投票信息并且验证如果已经添加过的投票就进行处罚
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err = cs.tryAddVote(msg.Vote, peerID)
@@ -741,6 +764,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 	}
 }
 
+//处理超时信息
 func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	cs.Logger.Debug("Received tock", "timeout", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 
@@ -795,6 +819,7 @@ func (cs *ConsensusState) handleTxsAvailable() {
 // Enter: +2/3 precommits for nil at (height,round-1)
 // Enter: +2/3 prevotes any or +2/3 precommits for block or any from (height, round)
 // NOTE: cs.StartTime was already set for height.
+// 开启新的轮次
 func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
 
@@ -912,10 +937,12 @@ func (cs *ConsensusState) enterPropose(height int64, round int) {
 	}
 }
 
+//判断是否是提案者
 func (cs *ConsensusState) isProposer(address []byte) bool {
 	return bytes.Equal(cs.Validators.GetProposer().Address, address)
 }
 
+//生成一个默认提案并且发送
 func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	var block *types.Block
 	var blockParts *types.PartSet
@@ -955,6 +982,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	}
 }
 
+//阅读至此
 // Returns true if the proposal block is complete &&
 // (if POLRound was proposed, we have +2/3 prevotes from there).
 func (cs *ConsensusState) isProposalComplete() bool {
@@ -999,6 +1027,7 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 // Enter: proposal block and POL is ready.
 // Prevote for LockedBlock if we're locked, or ProposalBlock if valid.
 // Otherwise vote nil.
+//进入prevote状态
 func (cs *ConsensusState) enterPrevote(height int64, round int) {
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cstypes.RoundStepPrevote <= cs.Step) {
 		cs.Logger.Debug(fmt.Sprintf("enterPrevote(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -1020,6 +1049,7 @@ func (cs *ConsensusState) enterPrevote(height int64, round int) {
 	// (so we have more time to try and collect +2/3 prevotes for a single block)
 }
 
+//
 func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
 
@@ -1054,6 +1084,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 }
 
 // Enter: any +2/3 prevotes at next round.
+
 func (cs *ConsensusState) enterPrevoteWait(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
 
@@ -1378,6 +1409,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	// * cs.Step is now cstypes.RoundStepNewHeight
 	// * cs.StartTime is set to when we will start round0.
 }
+
 //判断是否是Leader
 func (cs *ConsensusState) IsLeader() (flag bool) {
 
@@ -1385,6 +1417,8 @@ func (cs *ConsensusState) IsLeader() (flag bool) {
 	flag = cs.isProposer(address)
 	return flag
 }
+
+//记录指标
 func (cs *ConsensusState) recordMetrics(height int64, block *types.Block) {
 	cs.metrics.Validators.Set(float64(cs.Validators.Size()))
 	cs.metrics.ValidatorsPower.Set(float64(cs.Validators.TotalVotingPower()))
@@ -1560,7 +1594,7 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, err
 }
 
 //-----------------------------------------------------------------------------
-
+//添加投票
 func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error) {
 	cs.Logger.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "valIndex", vote.ValidatorIndex, "csHeight", cs.Height)
 
@@ -1679,6 +1713,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		}
 
 	case types.PrecommitType:
+		//进入precommit阶段
 		precommits := cs.Votes.Precommits(vote.Round)
 		cs.Logger.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
 
@@ -1707,6 +1742,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 	return
 }
 
+//对投票进行签名
 func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) (*types.Vote, error) {
 	// Flush the WAL. Otherwise, we may not recompute the same vote to sign, and the privValidator will refuse to sign anything.
 	cs.wal.FlushAndSync()
@@ -1727,6 +1763,7 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 	return vote, err
 }
 
+//获取投票时间
 func (cs *ConsensusState) voteTime() time.Time {
 	now := tmtime.Now()
 	minVoteTime := now
