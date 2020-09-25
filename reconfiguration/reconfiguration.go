@@ -61,7 +61,7 @@ type Nodeinfo struct {
 // }
 
 var PeriodCount = 0
-var Ticker = time.NewTicker(time.Second * 1000)
+var Ticker = time.NewTicker(time.Second * 100)
 var tenToAny map[int]string = map[int]string{0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "a", 11: "b", 12: "c", 13: "d", 14: "e", 15: "f", 16: "g", 17: "h", 18: "i", 19: "j", 20: "k", 21: "l", 22: "m", 23: "n", 24: "o", 25: "p", 26: "q", 27: "r", 28: "s", 29: "t", 30: "u", 31: "v", 32: "w", 33: "x", 34: "y", 35: "z", 36: ":", 37: ";", 38: "<", 39: "=", 40: ">", 41: "?", 42: "@", 43: "[", 44: "]", 45: "^", 46: "_", 47: "{", 48: "|", 49: "}", 50: "A", 51: "B", 52: "C", 53: "D", 54: "E", 55: "F", 56: "G", 57: "H", 58: "I", 59: "J", 60: "K", 61: "L", 62: "M", 63: "N", 64: "O", 65: "P", 66: "Q", 67: "R", 68: "S", 69: "T", 70: "U", 71: "V", 72: "W", 73: "X", 74: "Y", 75: "Z"}
 
 func NewReconfiguration(cs *cs.ConsensusState, l log.Logger, config *config.ReConfigurationConfig) *Reconfiguration {
@@ -135,7 +135,7 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 	Re.Client = *client.NewHTTP("localhost:26657", "/websocket")
 	if Re.Cs.IsLeader() {
 		PeriodCount++
-		Re.logger.Info("Leader is Me")
+		Re.logger.Error("Leader is Me")
 		BlockTimeStamp := Re.LatestBlockTime()
 		Re.GenerateReconfiguration(BlockTimeStamp)
 		Re.FillReconfiguration()
@@ -146,10 +146,9 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 	for {
 		select {
 		case <-Ticker.C:
-
 			if Re.Cs.IsLeader() {
 				PeriodCount++
-				Re.logger.Info("Leader is Me")
+				Re.logger.Error("Leader is Me")
 				BlockTimeStamp := Re.LatestBlockTime()
 				Re.GenerateReconfiguration(BlockTimeStamp)
 				Re.FillReconfiguration()
@@ -489,6 +488,7 @@ func (Re *Reconfiguration) DeleteExistElement(ShardIndex int, NodeIndex int) {
 	}
 }
 func (Re *Reconfiguration) FillReconfiguration() {
+	Re.SendNodes = make([][]Nodeinfo,Re.ShardCount)
 	var FillArea = make([][]int, len(Re.FillArea[:]))
 	for i := 0; i < len(Re.FillArea); i++ {
 		FillArea[i] = make([]int, len((Re.FillArea[i][:])))
@@ -637,13 +637,11 @@ func (Re *Reconfiguration) SendToAdjust() {
 func (Re *Reconfiguration) SendCreate() {
 	for i := 0; i < len(Re.SendNodes); i++ { //按分片分发删除
 		Re.SendShard(i)
-		break
 	}
 }
 func (Re *Reconfiguration) SendDelete() {
 	for i := 0; i < len(Re.SendNodes); i++ {
 		Re.SendDeleteShard(i)
-
 	}
 }
 func (Re *Reconfiguration) SendDeleteShard(i int) {
@@ -653,13 +651,12 @@ func (Re *Reconfiguration) SendDeleteShard(i int) {
 			continue
 		} else {
 			Re.DeleteNode(i, j)
-
 		}
 	}
 }
 func (Re *Reconfiguration) DeleteNode(i int, j int) {
 	OldPeerName := Re.SendNodes[i][j].NodeName
-	deleteurl := "http://10.77.70.135:9001/api/v2/tendermint/delete-peer"
+	deleteurl := "http://192.168.0.190:9001/api/v2/tendermint/delete-peer"
 	result := DeletePost(deleteurl, OldPeerName)
 	//修改删除列表的bool值
 	if result == true {
@@ -682,27 +679,26 @@ func (Re *Reconfiguration) SendNode(i int, j int) {
 		}
 		Node := Re.Nodesinfo[Shard][Re.SendNodes[i][j].Neighbor[k]]
 		SubStr := Node.PeerId + "@" + Node.NodeName + ":26656"
-		fmt.Println(SubStr)
+		// fmt.Println(SubStr)
 		if k == len(Re.SendNodes[i][j].Neighbor)-1 {
 			Neighborstr = Neighborstr + SubStr
 		} else {
 			Neighborstr = Neighborstr + SubStr + ","
 		}
 	}
-	fmt.Println("Done")
+	// fmt.Println("Done")
 	Gensisstr = Re.Chaininfo[Shard]
 	if Gensisstr != "" {
 		Gensisstr = Gensisstr + ""
 	}
 	OldPeerName = Re.SendNodes[i][j].NodeName //旧节点的名字
-
+	// fmt.Println("创世文件",Gensisstr)
 	Coordinate, _ := strconv.Atoi(Re.SendNodes[i][j].Coordinate)
 	Coordinate = Coordinate + 1
-	Shard1, _ := strconv.Atoi(Re.SendNodes[i][j].ShardName)
-	ShardName := string(Shard1 + 65)
-	NewPeerName := "TT" + ShardName + "Node" + strconv.Itoa(Coordinate)
+	ShardName := Re.SendNodes[i][j].ShardName
+	NewPeerName := ShardName + "S" + strconv.Itoa(Coordinate)
 	fmt.Println("旧容器名字：", OldPeerName, "新容器名字", NewPeerName)
-	moveurl := "http://10.77.70.135:9001/api/v2/tendermint/create-peer"
+	moveurl := "http://192.168.0.190:9001/api/v2/tendermint/create-peer"
 	result := MovePost(moveurl, OldPeerName, NewPeerName, Neighborstr, Gensisstr)
 	if result == true {
 		Re.FlagSend[i][j] = true
