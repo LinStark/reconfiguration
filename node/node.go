@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	re "github.com/tendermint/tendermint/reconfiguration"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -523,9 +524,9 @@ func NewNode(config *cfg.Config,
 	//EtcdServer:=Etcd.NewServer(EtcdCfg)
 	//go EtcdServer.Start()
 	//Reconfiguration
-	//ReconfigurationLogger := logger.With("module", "Reconfiguration")
-	//Re:= re.NewReconfiguration(consensusState,ReconfigurationLogger,config.ReConfiguration)
-	//go Re.PeriodReconfiguration()
+	ReconfigurationLogger := logger.With("module", "Reconfiguration")
+	Re:= re.NewReconfiguration(consensusState,ReconfigurationLogger,config.ReConfiguration)
+	go Re.PeriodReconfiguration()
 
 	node := &Node{
 		config:        config,
