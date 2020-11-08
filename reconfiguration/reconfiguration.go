@@ -637,7 +637,7 @@ func (Re *Reconfiguration) SendShard(i int) {
 }
 func (Re *Reconfiguration)checkNodes(){
 	for i:=0;i<len(Re.SendNodes);i++{
-		fmt.Println("移动的个数",len(Re.SendNodes[i]))
+		//fmt.Println("移动的个数",len(Re.SendNodes[i]))
 		for j:=0;j<len(Re.SendNodes[i]);j++{
 			for k:=0;k<len(Re.SendNodes[i]);k++{
 
