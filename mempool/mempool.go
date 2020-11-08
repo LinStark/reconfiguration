@@ -20,19 +20,18 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/types"
 )
-
+//precheckfunc 是一个可选的执行过滤器。如果是false返回，则它在checktx和拒绝交易之前被执行。保证交易没有超过区块大小
 // PreCheckFunc is an optional filter executed before CheckTx and rejects
 // transaction if false is returned. An example would be to ensure that a
 // transaction doesn't exceeded the block size.
 type PreCheckFunc func(types.Tx) error
-
+//postcheckfunc
 // PostCheckFunc is an optional filter executed after CheckTx and rejects
 // transaction if false is returned. An example would be to ensure a
 // transaction doesn't require more gas than available for the block.
 type PostCheckFunc func(types.Tx, *abci.ResponseCheckTx) error
-
-// TxInfo are parameters that get passed when attempting to add a tx to the
-// mempool.
+//向mempool添加交易
+// TxInfo are parameters that get passed when attempting to add a tx to the mempool.
 type TxInfo struct {
 	// We don't use p2p.ID here because it's too big. The gain is to store max 2
 	// bytes with each tx to identify the sender rather than 20 bytes.
@@ -44,21 +43,30 @@ type TxInfo struct {
 The mempool pushes new txs onto the proxyAppConn.
 It gets a stream of (req, res) tuples from the proxy.
 The mempool stores good txs in a concurrent linked-list.
-
+//链表存储？
 Multiple concurrent go-routines can traverse this linked-list
 safely by calling .NextWait() on each element.
 
 So we have several go-routines:
+//
+1. 共识过程中需要update与reap
+2. 每个节点运行checktx
+3. 节点获取tx通过链表形式
+4. 垃圾回收tx
 1. Consensus calling Update() and Reap() synchronously
 2. Many mempool reactor's peer routines calling CheckTx()
 3. Many mempool reactor's peer routines traversing the txs linked list
 4. Another goroutine calling GarbageCollectTxs() periodically
-
+//锁机制，保证交易不重复
 To manage these goroutines, there are three methods of locking.
+//链表是线程安全的
+
 1. Mutations to the linked-list is protected by an internal mtx (CList is goroutine-safe)
 2. Mutations to the linked-list elements are atomic
 3. CheckTx() calls can be paused upon Update() and Reap(), protected by .proxyMtx
+checktx<update()=reap
 
+detachprev删除交易
 Garbage collection of old elements from mempool.txs is handlde via
 the DetachPrev() call, which makes old elements not reachable by
 peer broadcastTxRoutine() automatically garbage collected.
@@ -66,7 +74,7 @@ peer broadcastTxRoutine() automatically garbage collected.
 TODO: Better handle abci client errors. (make it automatically handle connection errors)
 
 */
-
+//定义错误
 var (
 	// ErrTxInCache is returned to the client if we saw tx earlier
 	ErrTxInCache = errors.New("Tx already exists in cache")
@@ -105,10 +113,12 @@ func IsPreCheckError(err error) bool {
 	_, ok := err.(ErrPreCheck)
 	return ok
 }
+//错误定义完毕
 
-// PreCheckAminoMaxBytes checks that the size of the transaction plus the amino
-// overhead is smaller or equal to the expected maxBytes.
+
+// PreCheckAminoMaxBytes checks that the size of the transaction plus the amino overhead is smaller or equal to the expected maxBytes.
 func PreCheckAminoMaxBytes(maxBytes int64) PreCheckFunc {
+	//检查tx是否超载
 	return func(tx types.Tx) error {
 		// We have to account for the amino overhead in the tx size as well
 		// NOTE: fieldNum = 1 as types.Block.Data contains Txs []Tx as first field.
@@ -143,12 +153,13 @@ func PostCheckMaxGas(maxGas int64) PostCheckFunc {
 		return nil
 	}
 }
-
+//以上还是主要对交易的检查
+//交易hash值
 // TxID is the hex encoded hash of the bytes as a types.Tx.
 func TxID(tx []byte) string {
 	return fmt.Sprintf("%X", types.Tx(tx).Hash())
 }
-
+//获取tx的key
 // txKey is the fixed length array sha256 hash used as the key in maps.
 func txKey(tx types.Tx) [sha256.Size]byte {
 	return sha256.Sum256(tx)
@@ -158,28 +169,27 @@ func txKey(tx types.Tx) [sha256.Size]byte {
 // round. Transaction validity is checked using the CheckTx abci message before the transaction is
 // added to the pool. The Mempool uses a concurrent list structure for storing transactions that
 // can be efficiently accessed by multiple concurrent readers.
+//阅读至此
 type Mempool struct {
-	config *cfg.MempoolConfig
-
-	proxyMtx     sync.Mutex
-	proxyAppConn proxy.AppConnMempool
-	txs          *clist.CList // concurrent linked-list of good txs
-	preCheck     PreCheckFunc
+	config *cfg.MempoolConfig//配置文件
+	proxyMtx     sync.Mutex//锁
+	proxyAppConn proxy.AppConnMempool//mempool的应用
+	txs          *clist.CList // concurrent linked-list of good txs链表
+	preCheck     PreCheckFunc//函数
 	postCheck    PostCheckFunc
-
 	// Track whether we're rechecking txs.
 	// These are not protected by a mutex and are expected to be mutated
 	// in serial (ie. by abci responses which are called in serial).
 	recheckCursor *clist.CElement // next expected response
 	recheckEnd    *clist.CElement // re-checking stops here
 
-	// notify listeners (ie. consensus) when txs are available
+	// notify listeners (ie. consensus) when txs are available 提醒共识交易可用
 	notifiedTxsAvailable bool
 	txsAvailable         chan struct{} // fires once for each height, when the mempool is not empty
 
 	// Map for quick access to txs to record sender in CheckTx.
 	// txsMap: txKey -> CElement
-	txsMap sync.Map
+	txsMap sync.Map//map
 
 	// Atomic integers
 	height     int64 // the last block Update()'d to
@@ -187,7 +197,7 @@ type Mempool struct {
 	txsBytes   int64 // total size of mempool, in bytes
 
 	// Keep a cache of already-seen txs.
-	// This reduces the pressure on the proxyApp.
+	// This reduces the pressure on the proxyApp.//cache保存已经知道的tx
 	cache txCache
 
 	// A log of mempool txs
@@ -230,7 +240,7 @@ func NewMempool(
 	}
 	return mempool
 }
-
+//初始化功能，tx可用通道初始化
 // EnableTxsAvailable initializes the TxsAvailable channel,
 // ensuring it will trigger once every height when transactions are available.
 // NOTE: not thread safe - should only be called once, on startup
@@ -314,7 +324,7 @@ func (mem *Mempool) TxsBytes() int64 {
 func (mem *Mempool) FlushAppConn() error {
 	return mem.proxyAppConn.FlushSync()
 }
-
+//将所有交易删除
 // Flush removes all transactions from the mempool and cache
 func (mem *Mempool) Flush() {
 	mem.proxyMtx.Lock()
@@ -330,7 +340,7 @@ func (mem *Mempool) Flush() {
 	mem.txsMap = sync.Map{}
 	_ = atomic.SwapInt64(&mem.txsBytes, 0)
 }
-
+//返回头指针
 // TxsFront returns the first transaction in the ordered list for peer
 // goroutines to call .NextWait() on.
 func (mem *Mempool) TxsFront() *clist.CElement {
@@ -423,7 +433,7 @@ func (mem *Mempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), txInfo
 	if err = mem.proxyAppConn.Error(); err != nil {
 		return err
 	}
-
+	//在这里将消息发送
 	reqRes := mem.proxyAppConn.CheckTxAsync(tx)
 	reqRes.SetCallback(mem.reqResCb(tx, txInfo.PeerID, cb))
 
@@ -480,10 +490,15 @@ func (mem *Mempool) reqResCb(tx []byte, peerID uint16, externalCb func(*abci.Res
 // Called from:
 //  - resCbFirstTime (lock not held) if tx is valid
 func (mem *Mempool) addTx(memTx *mempoolTx) {
+	mem.logger.Info("aaa")
 	e := mem.txs.PushBack(memTx)
+	mem.logger.Info("bbb")
 	mem.txsMap.Store(txKey(memTx.tx), e)
+	mem.logger.Info("ccc")
 	atomic.AddInt64(&mem.txsBytes, int64(len(memTx.tx)))
+	mem.logger.Info("ddd")
 	mem.metrics.TxSizeBytes.Observe(float64(len(memTx.tx)))
+	mem.logger.Info("eee")
 }
 
 // Called from:
@@ -517,14 +532,18 @@ func (mem *Mempool) resCbFirstTime(tx []byte, peerID uint16, res *abci.Response)
 				gasWanted: r.CheckTx.GasWanted,
 				tx:        tx,
 			}
+			mem.logger.Info("ass2")
 			memTx.senders.Store(peerID, true)
+			mem.logger.Info("ass1")
 			mem.addTx(memTx)
+			mem.logger.Info("ass")
 			mem.logger.Info("Added good transaction",
 				"tx", TxID(tx),
 				"res", r,
 				"height", memTx.height,
 				"total", mem.Size(),
 			)
+			mem.logger.Info("ass4")
 			mem.notifyTxsAvailable()
 		} else {
 			// ignore bad transaction
@@ -736,6 +755,7 @@ func (mem *Mempool) removeTxs(txs types.Txs) []types.Tx {
 
 			continue
 		}
+		mem.logger.Info("add")
 		txsLeft = append(txsLeft, memTx.tx)
 	}
 	return txsLeft
@@ -814,6 +834,7 @@ func (cache *mapTxCache) Reset() {
 
 // Push adds the given tx to the cache and returns true. It returns
 // false if tx is already in the cache.
+//就将已经形成区块的交易固化到cache之中
 func (cache *mapTxCache) Push(tx types.Tx) bool {
 	cache.mtx.Lock()
 	defer cache.mtx.Unlock()

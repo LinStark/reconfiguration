@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"fmt"
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tst "github.com/tendermint/tendermint/libs/test"
@@ -259,6 +260,7 @@ func Test2_3MajorityRedux(t *testing.T) {
 			t.Error(err)
 		}
 		blockID, ok = voteSet.TwoThirdsMajority()
+
 		if !ok || !blockID.Equals(BlockID{blockHash, blockPartsHeader}) {
 			t.Errorf("There should be 2/3 majority")
 		}
@@ -355,7 +357,7 @@ func TestConflicts(t *testing.T) {
 			t.Errorf("Expected VoteSet.Add to succeed")
 		}
 	}
-
+	fmt.Println("************************")
 	// val0 votes again for blockHash1.
 	{
 		vote := withValidator(voteProto, val0Addr, 0)
@@ -382,7 +384,7 @@ func TestConflicts(t *testing.T) {
 			t.Errorf("Expected VoteSet.Add to return error, conflicting vote.")
 		}
 	}
-
+	fmt.Println("************************1")
 	// attempt tracking blockHash2, should fail because already set for peerA.
 	voteSet.SetPeerMaj23("peerA", BlockID{blockHash2, PartSetHeader{}})
 
@@ -397,7 +399,7 @@ func TestConflicts(t *testing.T) {
 			t.Errorf("Expected VoteSet.Add to return error, conflicting vote.")
 		}
 	}
-
+	fmt.Println("************************2")
 	// val1 votes for blockHash1.
 	{
 		addr := privValidators[1].GetPubKey().Address()
@@ -407,7 +409,7 @@ func TestConflicts(t *testing.T) {
 			t.Errorf("Expected VoteSet.Add to succeed")
 		}
 	}
-
+	fmt.Println("************************3")
 	// check
 	if voteSet.HasTwoThirdsMajority() {
 		t.Errorf("We shouldn't have 2/3 majority yet")

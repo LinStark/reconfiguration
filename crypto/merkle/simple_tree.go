@@ -6,6 +6,7 @@ import (
 
 // SimpleHashFromByteSlices computes a Merkle tree where the leaves are the byte slice,
 // in the provided order.
+//merkle树的计算
 func SimpleHashFromByteSlices(items [][]byte) []byte {
 	switch len(items) {
 	case 0:

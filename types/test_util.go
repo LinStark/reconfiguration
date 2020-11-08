@@ -31,6 +31,7 @@ func MakeCommit(blockID BlockID, height int64, round int,
 }
 
 func signAddVote(privVal PrivValidator, vote *Vote, voteSet *VoteSet) (signed bool, err error) {
+	//对投票进行签名
 	err = privVal.SignVote(voteSet.ChainID(), vote)
 	if err != nil {
 		return false, err

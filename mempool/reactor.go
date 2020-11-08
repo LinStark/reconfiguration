@@ -171,6 +171,7 @@ func (memR *MempoolReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 		if err != nil {
 			memR.Logger.Info("Could not check tx", "tx", TxID(msg.Tx), "err", err)
 		}
+
 		// broadcasting happens from go routines per peer
 	default:
 		memR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
@@ -233,7 +234,9 @@ func (memR *MempoolReactor) broadcastTxRoutine(peer p2p.Peer) {
 		if _, ok := memTx.senders.Load(peerID); !ok {
 			// send memTx
 			msg := &TxMessage{Tx: memTx.tx}
+			memR.Logger.Info("Send Begin")
 			success := peer.Send(MempoolChannel, cdc.MustMarshalBinaryBare(msg))
+			memR.Logger.Info("Send Done")
 			if !success {
 				time.Sleep(peerCatchupSleepIntervalMS * time.Millisecond)
 				continue

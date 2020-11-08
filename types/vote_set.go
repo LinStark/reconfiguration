@@ -21,9 +21,15 @@ type P2PID string
 	VoteSet helps collect signatures from validators at each height+round for a
 	predefined vote type.
 
+	投票集合主要是从验证者收集签名
 	We need VoteSet to be able to keep track of conflicting votes when validators
 	double-sign.  Yet, we can't keep track of *all* the votes seen, as that could
 	be a DoS attack vector.
+	为了防止dos攻击，需要保证不能出现double-sign
+
+	投票集合存储地方
+	1.voteSet.votes
+	2.VoteSet.Votesbyblock
 
 	There are two storage areas for votes.
 	1. voteSet.votes
@@ -31,8 +37,8 @@ type P2PID string
 
 	`.votes` is the "canonical" list of votes.  It always has at least one vote,
 	if a vote from a validator had been seen at all.  Usually it keeps track of
-	the first vote seen, but when a 2/3 majority is found, votes for that get
-	priority and are copied over from `.votesByBlock`.
+	the first vote seen, but when a 2/3 majority is found, votes for that get priority
+	 and are copied over from `.votesByBlock`.
 
 	`.votesByBlock` keeps track of a list of votes for a particular block.  There
 	are two ways a &blockVotes{} gets created in `.votesByBlock`.
@@ -52,22 +58,23 @@ type P2PID string
 	NOTE: Assumes that the sum total of voting power does not exceed MaxUInt64.
 */
 type VoteSet struct {
-	chainID string
-	height  int64
-	round   int
-	type_   SignedMsgType
-	valSet  *ValidatorSet
+	chainID string//链ID
+	height  int64//高度
+	round   int//轮次
+	type_   SignedMsgType//签名信息类型
+	valSet  *ValidatorSet//验证者集合
 
-	mtx           sync.Mutex
-	votesBitArray *cmn.BitArray
-	votes         []*Vote                // Primary votes to share
-	sum           int64                  // Sum of voting power for seen votes, discounting conflicts
-	maj23         *BlockID               // First 2/3 majority seen
-	votesByBlock  map[string]*blockVotes // string(blockHash|blockParts) -> blockVotes
-	peerMaj23s    map[P2PID]BlockID      // Maj23 for each peer
+	mtx           sync.Mutex//锁
+	votesBitArray *cmn.BitArray//投票的二进制表示
+	votes         []*Vote                // 投票集合
+	sum           int64                  // 现在票权总值
+	maj23         *BlockID               // 第一次达到2/3权值区块id
+	votesByBlock  map[string]*blockVotes // 与votes相同，只是备份存储
+	peerMaj23s    map[P2PID]BlockID      // 其他节点到达2/3的区块id
 }
 
 // Constructs a new VoteSet struct used to accumulate votes for given height/round.
+//maj23如果等于nil，说明还没区块通过
 func NewVoteSet(chainID string, height int64, round int, type_ SignedMsgType, valSet *ValidatorSet) *VoteSet {
 	if height == 0 {
 		cmn.PanicSanity("Cannot make VoteSet for height == 0, doesn't make sense.")
@@ -143,17 +150,18 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	if vote == nil {
 		return false, ErrVoteNil
 	}
+	//取出vote的具体值
 	valIndex := vote.ValidatorIndex
 	valAddr := vote.ValidatorAddress
 	blockKey := vote.BlockID.Key()
-
+	//投票者的基本index如果小于0，就是不在
 	// Ensure that validator index was set
 	if valIndex < 0 {
 		return false, errors.Wrap(ErrVoteInvalidValidatorIndex, "Index < 0")
 	} else if len(valAddr) == 0 {
 		return false, errors.Wrap(ErrVoteInvalidValidatorAddress, "Empty address")
 	}
-
+	//对投票基本信息进行核对
 	// Make sure the step matches.
 	if (vote.Height != voteSet.height) ||
 		(vote.Round != voteSet.round) ||
@@ -164,6 +172,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Ensure that signer is a validator.
+	//确保签名者在集合中
 	lookupAddr, val := voteSet.valSet.GetByIndex(valIndex)
 	if val == nil {
 		return false, errors.Wrapf(ErrVoteInvalidValidatorIndex,
@@ -171,12 +180,13 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Ensure that the signer has the right address.
+	// 比对地址
 	if !bytes.Equal(valAddr, lookupAddr) {
 		return false, errors.Wrapf(ErrVoteInvalidValidatorAddress,
 			"vote.ValidatorAddress (%X) does not match address (%X) for vote.ValidatorIndex (%d)\nEnsure the genesis file is correct across all validators.",
 			valAddr, lookupAddr, valIndex)
 	}
-
+	//如果已经获取过这个投票，就返回
 	// If we already know of this vote, return false.
 	if existing, ok := voteSet.getVote(valIndex, blockKey); ok {
 		if bytes.Equal(existing.Signature, vote.Signature) {
@@ -184,12 +194,12 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 		}
 		return false, errors.Wrapf(ErrVoteNonDeterministicSignature, "Existing vote: %v; New vote: %v", existing, vote)
 	}
-
+	//核对签名的准确性
 	// Check signature.
 	if err := vote.Verify(voteSet.chainID, val.PubKey); err != nil {
 		return false, errors.Wrapf(err, "Failed to verify vote with ChainID %s and PubKey %s", voteSet.chainID, val.PubKey)
 	}
-
+	//添加投票
 	// Add vote and get conflicting vote if any.
 	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
 	if conflicting != nil {
@@ -214,10 +224,12 @@ func (voteSet *VoteSet) getVote(valIndex int, blockKey string) (vote *Vote, ok b
 
 // Assumes signature is valid.
 // If conflicting vote exists, returns it.
+// 投票存在冲突
 func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower int64) (added bool, conflicting *Vote) {
 	valIndex := vote.ValidatorIndex
 
 	// Already exists in voteSet.votes?
+	//该投票已经存在这个投票池中
 	if existing := voteSet.votes[valIndex]; existing != nil {
 		if existing.BlockID.Equals(vote.BlockID) {
 			cmn.PanicSanity("addVerifiedVote does not expect duplicate votes")
@@ -225,21 +237,28 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 			conflicting = existing
 		}
 		// Replace vote if blockKey matches voteSet.maj23.
+		//可能有些投票临时改决定，投正确票
 		if voteSet.maj23 != nil && voteSet.maj23.Key() == blockKey {
 			voteSet.votes[valIndex] = vote
 			voteSet.votesBitArray.SetIndex(valIndex, true)
+		}else{
+			fmt.Println("与现在投票集合key不合",blockKey)
 		}
+
 		// Otherwise don't add it to voteSet.votes
 	} else {
+		//投票池不存在该选票
 		// Add to voteSet.votes and incr .sum
 		voteSet.votes[valIndex] = vote
 		voteSet.votesBitArray.SetIndex(valIndex, true)
+		//增加票权
 		voteSet.sum += votingPower
 	}
-
+	//对block进行操作
 	votesByBlock, ok := voteSet.votesByBlock[blockKey]
 	if ok {
 		if conflicting != nil && !votesByBlock.peerMaj23 {
+			// 存在冲突
 			// There's a conflict and no peer claims that this block is special.
 			return false, conflicting
 		}
@@ -247,22 +266,31 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	} else {
 		// .votesByBlock doesn't exist...
 		if conflicting != nil {
+			// votesblock不存在
 			// ... and there's a conflicting vote.
 			// We're not even tracking this blockKey, so just forget it.
 			return false, conflicting
 		}
 		// ... and there's no conflicting vote.
 		// Start tracking this blockKey
+		//对这个区块开启一个单独的空间
 		votesByBlock = newBlockVotes(false, voteSet.valSet.Size())
 		voteSet.votesByBlock[blockKey] = votesByBlock
 		// We'll add the vote in a bit.
 	}
 
 	// Before adding to votesByBlock, see if we'll exceed quorum
-	origSum := votesByBlock.sum
-	quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
+	//看看是否超过多数
+	//
 
+	fmt.Println("votesByBlock.sum",votesByBlock.sum)
+	origSum := votesByBlock.sum
+	//看看权重是否大于2/3了
+
+	quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
+	fmt.Println("quorum",quorum)
 	// Add vote to votesByBlock
+	//添加权重
 	votesByBlock.addVerifiedVote(vote, votingPower)
 
 	// If we just crossed the quorum threshold and have 2/3 majority...
@@ -309,6 +337,7 @@ func (voteSet *VoteSet) SetPeerMaj23(peerID P2PID, blockID BlockID) error {
 
 	// Create .votesByBlock entry if needed.
 	votesByBlock, ok := voteSet.votesByBlock[blockKey]
+
 	if ok {
 		if votesByBlock.peerMaj23 {
 			return nil // Nothing to do
@@ -413,6 +442,7 @@ func (voteSet *VoteSet) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
 	if voteSet.maj23 != nil {
+		fmt.Println(voteSet.maj23)
 		return *voteSet.maj23, true
 	}
 	return BlockID{}, false
@@ -573,6 +603,7 @@ func newBlockVotes(peerMaj23 bool, numValidators int) *blockVotes {
 }
 
 func (vs *blockVotes) addVerifiedVote(vote *Vote, votingPower int64) {
+	//对权重进行叠加
 	valIndex := vote.ValidatorIndex
 	if existing := vs.votes[valIndex]; existing == nil {
 		vs.bitArray.SetIndex(valIndex, true)

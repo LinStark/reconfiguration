@@ -89,6 +89,7 @@ func (e Executor) Execute() error {
 	err := e.Command.Execute()
 	if err != nil {
 		if viper.GetBool(TraceFlag) {
+			fmt.Println("发生错误")
 			fmt.Fprintf(os.Stderr, "ERROR: %+v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)

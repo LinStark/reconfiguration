@@ -49,7 +49,7 @@ x * TestHalt1 - if we see +2/3 precommits after timing out into new round, we sh
 */
 
 //----------------------------------------------------------------------------------------------------
-// ProposeSuite
+// Propose Suite
 
 func TestStateProposerSelection0(t *testing.T) {
 	cs1, vss := randConsensusState(4)
@@ -141,7 +141,7 @@ func TestStateEnterProposeNoPrivValidator(t *testing.T) {
 func TestStateEnterProposeYesPrivValidator(t *testing.T) {
 	cs, _ := randConsensusState(1)
 	height, round := cs.Height, cs.Round
-
+	fmt.Println(height,round)
 	// Listen for propose timeout event
 
 	timeoutCh := subscribe(cs.eventBus, types.EventQueryTimeoutPropose)
@@ -224,7 +224,7 @@ func TestStateBadProposal(t *testing.T) {
 }
 
 //----------------------------------------------------------------------------------------------------
-// FullRoundSuite
+// Full Round Suite
 
 // propose, prevote, and precommit a block
 func TestStateFullRound1(t *testing.T) {
@@ -340,22 +340,25 @@ func TestStateLockNoPOL(t *testing.T) {
 
 	// start round and wait for prevote
 	cs1.enterNewRound(height, round)
+	fmt.Println("enterNewRound")
 	cs1.startRoutines(0)
-
+	fmt.Println("startRoutines")
 	ensureNewRound(newRoundCh, height, round)
-
+	fmt.Println("ensureNewRound")
 	ensureNewProposal(proposalCh, height, round)
+	fmt.Println("ensureNewProposal")
 	roundState := cs1.GetRoundState()
+
 	theBlockHash := roundState.ProposalBlock.Hash()
 	thePartSetHeader := roundState.ProposalBlockParts.Header()
-
+	fmt.Println("roundstate",roundState)
 	ensurePrevote(voteCh, height, round) // prevote
-
+	//等待prevote,这些节点准备好
 	// we should now be stuck in limbo forever, waiting for more prevotes
 	// prevote arrives from vs2:
 	signAddVotes(cs1, types.PrevoteType, theBlockHash, thePartSetHeader, vs2)
 	ensurePrevote(voteCh, height, round) // prevote
-
+	//进入预提交的条件：
 	ensurePrecommit(voteCh, height, round) // precommit
 	// the proposed block should now be locked and our precommit added
 	validatePrecommit(t, cs1, round, round, vss[0], theBlockHash, theBlockHash)
@@ -371,8 +374,6 @@ func TestStateLockNoPOL(t *testing.T) {
 	// (note we're entering precommit for a second time this round)
 	// but with invalid args. then we enterPrecommitWait, and the timeout to new round
 	ensureNewTimeout(timeoutWaitCh, height, round, cs1.config.TimeoutPrecommit.Nanoseconds())
-
-	///
 
 	round = round + 1 // moving to the next round
 	ensureNewRound(newRoundCh, height, round)

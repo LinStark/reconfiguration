@@ -66,6 +66,7 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 
 // Implements PrivValidator.
 func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
+	fmt.Println("sign the vote")
 	useChainID := chainID
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
@@ -114,7 +115,9 @@ var ErroringMockPVErr = errors.New("erroringMockPV always returns an error")
 
 // Implements PrivValidator.
 func (pv *erroringMockPV) SignVote(chainID string, vote *Vote) error {
+	fmt.Println("aaa")
 	return ErroringMockPVErr
+
 }
 
 // Implements PrivValidator.

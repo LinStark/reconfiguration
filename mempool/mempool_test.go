@@ -72,10 +72,11 @@ func checkTxs(t *testing.T, mempool *Mempool, count int, peerID uint16) types.Tx
 	for i := 0; i < count; i++ {
 		txBytes := make([]byte, 20)
 		txs[i] = txBytes
-		_, err := rand.Read(txBytes)
+		_, err := rand.Read(txBytes)//读取数据
 		if err != nil {
 			t.Error(err)
 		}
+		//检测tx的合理性
 		if err := mempool.CheckTxWithInfo(txBytes, nil, txInfo); err != nil {
 			// Skip invalid txs.
 			// TestMempoolFilters will fail otherwise. It asserts a number of txs
@@ -197,12 +198,13 @@ func TestTxsAvailable(t *testing.T) {
 	mempool.EnableTxsAvailable()
 
 	timeoutMS := 500
-
+	//500毫秒内无交易就被关闭
 	// with no txs, it shouldnt fire
 	ensureNoFire(t, mempool.TxsAvailable(), timeoutMS)
 
 	// send a bunch of txs, it should only fire once
 	txs := checkTxs(t, mempool, 100, UnknownPeerID)
+	//通过检测的tx集合
 	ensureFire(t, mempool.TxsAvailable(), timeoutMS)
 	ensureNoFire(t, mempool.TxsAvailable(), timeoutMS)
 
@@ -215,6 +217,7 @@ func TestTxsAvailable(t *testing.T) {
 	}
 	ensureFire(t, mempool.TxsAvailable(), timeoutMS)
 	ensureNoFire(t, mempool.TxsAvailable(), timeoutMS)
+	//发送交易
 
 	// send a bunch more txs. we already fired for this height so it shouldnt fire again
 	moreTxs := checkTxs(t, mempool, 50, UnknownPeerID)

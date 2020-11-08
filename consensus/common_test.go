@@ -152,7 +152,7 @@ func addVotes(to *ConsensusState, votes ...*types.Vote) {
 		to.peerMsgQueue <- msgInfo{Msg: &VoteMessage{vote}}
 	}
 }
-
+//Stub
 func signAddVotes(to *ConsensusState, voteType types.SignedMsgType, hash []byte, header types.PartSetHeader, vss ...*validatorStub) {
 	votes := signVotes(voteType, hash, header, vss...)
 	addVotes(to, votes...)

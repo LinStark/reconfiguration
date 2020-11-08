@@ -15,12 +15,12 @@ var (
 // conditional on the height/round/step in the timeoutInfo.
 // The timeoutInfo.Duration may be non-positive.
 type TimeoutTicker interface {
-	Start() error
-	Stop() error
-	Chan() <-chan timeoutInfo       // on which to receive a timeout
-	ScheduleTimeout(ti timeoutInfo) // reset the timer
+	Start() error//开启计时协程
+	Stop() error//关闭计时协程
+	Chan() <-chan timeoutInfo       // on which to receive a timeout 保证在cs中可以获取到该通道信息
+	ScheduleTimeout(ti timeoutInfo) // reset the timer重置计时信息
 
-	SetLogger(log.Logger)
+	SetLogger(log.Logger)//设置日志
 }
 
 // timeoutTicker wraps time.Timer,
@@ -43,6 +43,7 @@ func NewTimeoutTicker() TimeoutTicker {
 		tickChan: make(chan timeoutInfo, tickTockBufferSize),
 		tockChan: make(chan timeoutInfo, tickTockBufferSize),
 	}
+	//注册服务
 	tt.BaseService = *cmn.NewBaseService(nil, "TimeoutTicker", tt)
 	tt.stopTimer() // don't want to fire until the first scheduled timeout
 	return tt
@@ -98,11 +99,12 @@ func (t *timeoutTicker) timeoutRoutine() {
 		select {
 		case newti := <-t.tickChan:
 			t.Logger.Debug("Received tick", "old_ti", ti, "new_ti", newti)
-
+			// 收到一个计时要求
 			// ignore tickers for old height/round/step
 			if newti.Height < ti.Height {
 				continue
 			} else if newti.Height == ti.Height {
+				//说明是一个错误请求
 				if newti.Round < ti.Round {
 					continue
 				} else if newti.Round == ti.Round {
@@ -113,14 +115,17 @@ func (t *timeoutTicker) timeoutRoutine() {
 			}
 
 			// stop the last timer
+			//关闭上一次的计时器
 			t.stopTimer()
 
 			// update timeoutInfo and reset timer
 			// NOTE time.Timer allows duration to be non-positive
 			ti = newti
+			//重新计时
 			t.timer.Reset(ti.Duration)
 			t.Logger.Debug("Scheduled timeout", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 		case <-t.timer.C:
+			//时间到
 			t.Logger.Info("Timed out", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 			// go routine here guarantees timeoutRoutine doesn't block.
 			// Determinism comes from playback in the receiveRoutine.
