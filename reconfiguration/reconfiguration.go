@@ -7,10 +7,10 @@ import (
 	"github.com/reconfiguration/config"
 	cs "github.com/tendermint/tendermint/consensus"
 
-	//"github.com/tendermint/tendermint/SGX"
+	"github.com/tendermint/tendermint/SGX"
 	//cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/libs/log"
-	//"github.com/tendermint/tendermint/rpc/client"
+	"github.com/tendermint/tendermint/rpc/client"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -82,7 +82,7 @@ func NewReconfiguration(cs *cs.ConsensusState, l log.Logger, config *config.ReCo
 	}
 	Re.SendNodes = make([][]Nodeinfo, Re.ShardCount)
 	Re.ReadNode()  //读取数据
-	Re.ReadChain() //读取链数s据
+	Re.ReadChain() //读取链数据
 	return Re
 }
 
@@ -135,8 +135,8 @@ func (Re *Reconfiguration) ReadChain() {
 func (Re *Reconfiguration) PeriodReconfiguration() {
 	//定时器实现
 	time.Sleep(time.Second * 5)
-	//Re.Client = *client.NewHTTP("localhost:26657", "/websocket")
-	//if Re.Cs.IsLeader() {
+	Re.Client = *client.NewHTTP("localhost:26657", "/websocket")
+	if Re.Cs.IsLeader() {
 		PeriodCount++
 		Re.logger.Error("Leader is Me")
 		BlockTimeStamp := Re.LatestBlockTime()
@@ -145,7 +145,7 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 		Re.SendReconfiguration()
 		Re.SendToAdjust()
 
-	//}
+	}
 	for {
 		select {
 		case <-Ticker.C:
@@ -162,14 +162,14 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 		}
 	}
 }
-//func (Re *Reconfiguration) LatestBlockTime() time.Time {
-//	//获取区块的可信时间戳
-//	status, err := Re.Client.Status()
-//	if err != nil {
-//		Re.logger.Error("err:", "Reconfiguration", err)
-//	}
-//	return status.SyncInfo.LatestBlockTime
-//}
+func (Re *Reconfiguration) LatestBlockTime() time.Time {
+	//获取区块的可信时间戳
+	status, err := Re.Client.Status()
+	if err != nil {
+		Re.logger.Error("err:", "Reconfiguration", err)
+	}
+	return status.SyncInfo.LatestBlockTime
+}
 func (Re *Reconfiguration) GenerateReconfiguration(BlockStamp time.Time) {
 	//生成可信方案
 	CredibleTimeStamp := SGX.GetCredibleTimeStamp()
@@ -254,19 +254,19 @@ func (Re *Reconfiguration) GenerateCredibleFillArea(Shard int) []int {
 // }
 func (Re *Reconfiguration) SendReconfiguration() {
 	//发送交易到区块
-	//Re.logger.Info("Sending Reconfiguration")
+	Re.logger.Info("Sending Reconfiguration")
 	Re.Txs = make([][]Tx, Re.ShardCount)
-	//res, _ := json.Marshal(Re.Nodesinfo)
+	res, _ := json.Marshal(Re.Nodesinfo)
 
-	//go Re.Client.BroadcastTxAsync(res)
-	//for i := 0; i < Re.ShardCount; i++ {
-	//	Re.Txs[i] = make([]Tx, Re.NodeCount)
-	//	for j := 0; j < Re.NodeCount; j++ {
-	//		tx, _ := json.Marshal(Re.Nodesinfo[i][j])
-	//		//Re.logger.Info("tx:", "Reconfiguration", string(tx))
-	//		go Re.Client.BroadcastTxAsync(tx)
-	//	}
-	//}
+	go Re.Client.BroadcastTxAsync(res)
+	for i := 0; i < Re.ShardCount; i++ {
+		Re.Txs[i] = make([]Tx, Re.NodeCount)
+		for j := 0; j < Re.NodeCount; j++ {
+			tx, _ := json.Marshal(Re.Nodesinfo[i][j])
+			//Re.logger.Info("tx:", "Reconfiguration", string(tx))
+			go Re.Client.BroadcastTxAsync(tx)
+		}
+	}
 }
 func decimalToAny(num int, n int) string {
 	new_num_str := ""
@@ -694,30 +694,30 @@ func (Re *Reconfiguration) SendToAdjust() {
 
 	Re.SendDelete()
 	//检测所有节点容器是否被删除
-	// for{
-	// 	time.Sleep(time.Second)//睡眠1秒钟
-	// 	//遍历节点是否都为ture删除
-	// 	if Re.DeleteFlag()==false{//判断是否全部被删除了
-	// 		Re.SendDelete()//继续删除
-	// 	}else{
-	// 		break//全部删除
-	// 	}
-	// }
+	for{
+		time.Sleep(time.Second)//睡眠1秒钟
+		//遍历节点是否都为ture删除
+		if Re.DeleteFlag()==false{//判断是否全部被删除了
+			Re.SendDelete()//继续删除
+		}else{
+			break//全部删除
+		}
+	}
 
-	//Re.logger.Info("调整方案删除过程已经完成")
+	Re.logger.Info("调整方案删除过程已经完成")
 
 	Re.SendCreate() //创建节点，加入网络
-	// for{
-	// 	//检测所有节点是否完全创建
-	// 	time.Sleep(time.Second)//睡眠1秒钟
-	// 	//遍历节点是否都为ture创建
-	// 	if Re.CreateFlag()==false{//判断是否全部被创建
-	// 		Re.SendCreate()//继续创建
-	// 	}else{
-	// 		break//全部创建
-	// 	}
-	// }
-	//Re.logger.Info("调整方案已经成功执行")
+	for{
+		//检测所有节点是否完全创建
+		time.Sleep(time.Second)//睡眠1秒钟
+		//遍历节点是否都为ture创建
+		if Re.CreateFlag()==false{//判断是否全部被创建
+			Re.SendCreate()//继续创建
+		}else{
+			break//全部创建
+		}
+	}
+	Re.logger.Info("调整方案已经成功执行")
 }
 func (Re *Reconfiguration) SendCreate() {
 	for i := 0; i < len(Re.SendNodes); i++ { //按分片创建

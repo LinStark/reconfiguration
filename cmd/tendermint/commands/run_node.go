@@ -56,7 +56,7 @@ func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("Failed to create node: %v", err)
 			}
-			Re:=re.NewReconfiguration(n.ConsensusState(),n.Logger,n.Config().ReConfiguration)
+			Re := re.NewReconfiguration(n.ConsensusState(), n.Logger, n.Config().ReConfiguration)
 			go Re.PeriodReconfiguration()
 			// Stop upon receiving SIGTERM or CTRL-C.
 			cmn.TrapSignal(logger, func() {
