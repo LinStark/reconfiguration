@@ -242,7 +242,7 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 			voteSet.votes[valIndex] = vote
 			voteSet.votesBitArray.SetIndex(valIndex, true)
 		}else{
-			fmt.Println("与现在投票集合key不合",blockKey)
+			//fmt.Println("与现在投票集合key不合",blockKey)
 		}
 
 		// Otherwise don't add it to voteSet.votes
@@ -283,12 +283,12 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	//看看是否超过多数
 	//
 
-	fmt.Println("votesByBlock.sum",votesByBlock.sum)
+	//fmt.Println("votesByBlock.sum",votesByBlock.sum)
 	origSum := votesByBlock.sum
 	//看看权重是否大于2/3了
 
 	quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
-	fmt.Println("quorum",quorum)
+	//fmt.Println("quorum",quorum)
 	// Add vote to votesByBlock
 	//添加权重
 	votesByBlock.addVerifiedVote(vote, votingPower)
@@ -442,7 +442,7 @@ func (voteSet *VoteSet) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
 	if voteSet.maj23 != nil {
-		fmt.Println(voteSet.maj23)
+		//fmt.Println(voteSet.maj23)
 		return *voteSet.maj23, true
 	}
 	return BlockID{}, false

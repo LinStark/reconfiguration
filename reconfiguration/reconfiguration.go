@@ -3,20 +3,19 @@ package reconfiguration
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/reconfiguration/SGX"
-	"github.com/reconfiguration/config"
+	"github.com/tendermint/tendermint/config"
 	cs "github.com/tendermint/tendermint/consensus"
+	"math"
+	"net/http"
+	"strings"
 
 	"github.com/tendermint/tendermint/SGX"
 	//cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/rpc/client"
 	"io/ioutil"
-	"math"
 	"math/rand"
-	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -31,7 +30,7 @@ type Reconfiguration struct {
 	Txs        [][]Tx
 	IsLeader   bool
 	Cs         *cs.ConsensusState
-	//Client     client.HTTP
+	Client     client.HTTP
 	logger     log.Logger
 	Chaininfo  []string
 	Count      []int
@@ -64,14 +63,14 @@ type Nodeinfo struct {
 // }
 
 var PeriodCount = 0
-var Ticker = time.NewTicker(time.Second * 100)
+var Ticker = time.NewTicker(time.Second * 50)
 var tenToAny map[int]string = map[int]string{0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "a", 11: "b", 12: "c", 13: "d", 14: "e", 15: "f", 16: "g", 17: "h", 18: "i", 19: "j", 20: "k", 21: "l", 22: "m", 23: "n", 24: "o", 25: "p", 26: "q", 27: "r", 28: "s", 29: "t", 30: "u", 31: "v", 32: "w", 33: "x", 34: "y", 35: "z", 36: ":", 37: ";", 38: "<", 39: "=", 40: ">", 41: "?", 42: "@", 43: "[", 44: "]", 45: "^", 46: "_", 47: "{", 48: "|", 49: "}", 50: "A", 51: "B", 52: "C", 53: "D", 54: "E", 55: "F", 56: "G", 57: "H", 58: "I", 59: "J", 60: "K", 61: "L", 62: "M", 63: "N", 64: "O", 65: "P", 66: "Q", 67: "R", 68: "S", 69: "T", 70: "U", 71: "V", 72: "W", 73: "X", 74: "Y", 75: "Z"}
 
 func NewReconfiguration(cs *cs.ConsensusState, l log.Logger, config *config.ReConfigurationConfig) *Reconfiguration {
 	ShardCount, _ := strconv.Atoi(config.ShardCount)
 	NodeCount, _ := strconv.Atoi(config.NodeCount)
 	MoveCount, _ := strconv.Atoi(config.MoveCount)
-	// fmt.Println("ShardCount", ShardCount, "NodeCount", NodeCount)
+	fmt.Println("ShardCount", ShardCount, "NodeCount", NodeCount,"MoveCount",MoveCount)
 	Re := &Reconfiguration{
 		ShardCount: ShardCount,
 		NodeCount:  NodeCount,
@@ -83,6 +82,7 @@ func NewReconfiguration(cs *cs.ConsensusState, l log.Logger, config *config.ReCo
 	Re.SendNodes = make([][]Nodeinfo, Re.ShardCount)
 	Re.ReadNode()  //读取数据
 	Re.ReadChain() //读取链数据
+	fmt.Println("链信息",Re.Chaininfo)
 	return Re
 }
 
@@ -114,7 +114,7 @@ func (Re *Reconfiguration) ReadNode() {
 	}
 	JsonParse := NewJsonStruct()
 	v := []Nodeinfo{}
-	JsonParse.Load("data.json", &v)
+	JsonParse.Load("config/data.json", &v)
 	for i := 0; i < len(v); i++ {
 		// fmt.Println("i值：", i)
 		ShardIndex, _ := strconv.Atoi(v[i].Coordinate)
@@ -128,7 +128,7 @@ func (Re *Reconfiguration) ReadChain() {
 	Re.Chaininfo = make([]string, Re.ShardCount)
 	JsonParse := NewJsonStruct()
 	v := []string{}
-	JsonParse.Load("shard.json", &v)
+	JsonParse.Load("config/shard.json", &v)
 	Re.Chaininfo = v
 
 }
@@ -139,11 +139,18 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 	if Re.Cs.IsLeader() {
 		PeriodCount++
 		Re.logger.Error("Leader is Me")
+		fmt.Println("获取时间1")
 		BlockTimeStamp := Re.LatestBlockTime()
+		fmt.Println("获取时间2",)
 		Re.GenerateReconfiguration(BlockTimeStamp)
+		fmt.Println("获取时间3")
 		Re.FillReconfiguration()
+		fmt.Println("获取时间4")
 		Re.SendReconfiguration()
+		fmt.Println("获取时间5")
+		fmt.Println("调整方案",Re.SendNodes)
 		Re.SendToAdjust()
+		fmt.Println("获取时间6")
 
 	}
 	for {
@@ -158,7 +165,8 @@ func (Re *Reconfiguration) PeriodReconfiguration() {
 				Re.SendReconfiguration()
 				Re.SendToAdjust()
 
-			//}
+				//}
+			}
 		}
 	}
 }
@@ -691,7 +699,7 @@ func (Re *Reconfiguration) SendToAdjust() {
 			Re.FlagCreate[i][j] = false
 		}
 	}
-
+	fmt.Println("删除节点开始")
 	Re.SendDelete()
 	//检测所有节点容器是否被删除
 	for{
@@ -726,23 +734,31 @@ func (Re *Reconfiguration) SendCreate() {
 }
 func (Re *Reconfiguration) SendDelete() {
 	for i := 0; i < len(Re.SendNodes); i++ {
+		fmt.Println("删除节点数",len(Re.SendNodes))
+		fmt.Println("删除节点数",len(Re.SendNodes))
 		Re.SendDeleteShard(i)
 	}
 }
 func (Re *Reconfiguration) SendDeleteShard(i int) {
 	for j := 0; j < len(Re.SendNodes[i]); j++ {
+		fmt.Println("开始删除")
 		//判断该容器是否被删除，如果被删除则跳过
 		if Re.FlagSend[i][j] == true {
+			fmt.Println("不进入")
 			continue
 		} else {
+			fmt.Println("进入")
 			Re.DeleteNode(i, j)
 		}
 	}
 }
 func (Re *Reconfiguration) DeleteNode(i int, j int) {
 	OldPeerName := Re.SendNodes[i][j].NodeName
+	fmt.Println("要删除的节点")
 	deleteurl := "http://10.77.70.135:9001/api/v2/tendermint/delete-peer"
+	fmt.Println("请求的连接",deleteurl)
 	result := DeletePost(deleteurl, OldPeerName)
+	fmt.Println("返回结果",result)
 	//修改删除列表的bool值
 	if true {
 		Re.FlagSend[i][j] = true
@@ -776,7 +792,7 @@ func (Re *Reconfiguration) SendNode(i int, j int) {
 	if Gensisstr != "" {
 		Gensisstr = Gensisstr + ""
 	}
-	OldPeerName = Re.SendNodes[i][j].NodeName //旧节点的名字
+	OldPeerName := Re.SendNodes[i][j].NodeName //旧节点的名字
 	// fmt.Println("创世文件",Gensisstr)
 	Coordinate, _ := strconv.Atoi(Re.SendNodes[i][j].Coordinate)
 	Coordinate = Coordinate + 1
@@ -785,8 +801,8 @@ func (Re *Reconfiguration) SendNode(i int, j int) {
 	fmt.Println("旧容器名字：", OldPeerName, "新容器名字", NewPeerName)
 	moveurl := "http://10.77.70.135:9001/api/v2/tendermint/create-peer"
 	result := MovePost(moveurl, OldPeerName, NewPeerName, Neighborstr, Gensisstr)
-	if result == true {
-		Re.FlagSend[i][j] = true
+	if result {
+		Re.FlagCreate[i][j] = true
 	}
 }
 type createInfo struct {

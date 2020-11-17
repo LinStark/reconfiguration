@@ -2550,7 +2550,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			cs.handleMsg(mi) //处理信息
 		case mi = <-cs.internalMsgQueue:
 			//接受到信息
-			fmt.Println("接收到信息")
+			//fmt.Println("接收到信息")
 
 			cs.wal.WriteSync(mi) // NOTE: fsync
 
@@ -2588,18 +2588,18 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 		err   error
 	)
 	msg, peerID := mi.Msg, mi.PeerID
-	fmt.Println("msg",msg)
+	//fmt.Println("msg",msg)
 	switch msg := msg.(type) {
 	case *ProposalMessage:
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		//获取提案信息
-		fmt.Println("获取提案信息")
+		//fmt.Println("获取提案信息")
 		err = cs.setProposal(msg.Proposal)
 	case *BlockPartMessage:
 		//开始投票
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
-		fmt.Println("获取区块信息")
+		//fmt.Println("获取区块信息")
 		added, err = cs.addProposalBlockPart(msg, peerID)
 		if added {
 			cs.statsMsgQueue <- mi
@@ -2704,7 +2704,7 @@ func (cs *ConsensusState) handleTxsAvailable() {
 // 开启新的轮次 Round Step NewHeight
 func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
-	fmt.Println("cs.height",cs.Height,"cs.Round",cs.Round,"cs.Step",cs.Step)
+	//fmt.Println("cs.height",cs.Height,"cs.Round",cs.Round,"cs.Step",cs.Step)
 	//检测高度和轮次是否合法
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cs.Step != cstypes.RoundStepNewHeight) {
 		logger.Debug(fmt.Sprintf("enterNewRound(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -2862,7 +2862,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	propBlockId := types.BlockID{Hash: block.Hash(), PartsHeader: blockParts.Header()}
 	//提案包含 高度、所处状态
 	proposal := types.NewProposal(height, round, cs.ValidRound, propBlockId)
-	fmt.Println(cs.ValidRound,"cs.ValidRound")
+	//fmt.Println(cs.ValidRound,"cs.ValidRound")
 	//leader对这个提案进行签名，需要传入参数链id和proposal
 	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal); err == nil {
 
@@ -2890,7 +2890,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 func (cs *ConsensusState) isProposalComplete() bool {
 
 	if cs.Proposal == nil || cs.ProposalBlock == nil {
-		fmt.Println("nil false")
+		//fmt.Println("nil false")
 		return false
 	}
 	// we have the proposal. if there's a POLRound,
@@ -2938,7 +2938,7 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 // Otherwise vote nil.
 //进入prevote状态
 func (cs *ConsensusState) enterPrevote(height int64, round int) {
-	fmt.Println("enterPrevote")
+	//fmt.Println("enterPrevote")
 	//检验轮次等等是否合法
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cstypes.RoundStepPrevote <= cs.Step) {
 		cs.Logger.Debug(fmt.Sprintf("enterPrevote(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -2980,7 +2980,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	}
 	//检验提案区块
 	// Validate proposal block
-	fmt.Println("检验提案区块")
+	//fmt.Println("检验提案区块")
 	err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock)
 
 	if err != nil {
@@ -3003,7 +3003,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 func (cs *ConsensusState) enterPrevoteWait(height int64, round int) {
 	//prevote等待态
 	logger := cs.Logger.With("height", height, "round", round)
-	fmt.Println("enterprevotewait")
+	//fmt.Println("enterprevotewait")
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cstypes.RoundStepPrevoteWait <= cs.Step) {
 		logger.Debug(fmt.Sprintf("enterPrevoteWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
@@ -3420,7 +3420,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 	if cs.ProposalBlockParts == nil {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockID.PartsHeader)
 	}
-	fmt.Println("done")
+	//fmt.Println("done")
 	cs.Logger.Info("Received proposal", "proposal", proposal)
 	return nil
 }
@@ -3464,10 +3464,10 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		cs.eventBus.PublishEventCompleteProposal(cs.CompleteProposalEvent())
 
 		// Update Valid* if we can.
-		fmt.Println("Prevotes")
+		//fmt.Println("Prevotes")
 		prevotes := cs.Votes.Prevotes(cs.Round)
 		blockID, hasTwoThirds := prevotes.TwoThirdsMajority()
-		fmt.Println("blockID",blockID,"hasTwoThirds",hasTwoThirds)
+		//fmt.Println("blockID",blockID,"hasTwoThirds",hasTwoThirds)
 		if hasTwoThirds && !blockID.IsZero() && (cs.ValidRound < cs.Round) {
 			if cs.ProposalBlock.HashesTo(blockID.Hash) {
 				cs.Logger.Info("Updating valid block to new proposal block",
@@ -3484,7 +3484,7 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		}
 
 		if cs.Step <= cstypes.RoundStepPropose && cs.isProposalComplete() {
-			fmt.Println("step:",cs.Step)
+			//fmt.Println("step:",cs.Step)
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
 			if hasTwoThirds { // this is optimisation as this will be triggered when prevote is added
@@ -3586,7 +3586,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		// 如果收到2/3的prevote信息，则进行precommit阶段
 		// If +2/3 prevotes for a block or nil for *any* round:
 		if blockID, ok := prevotes.TwoThirdsMajority(); ok {
-			fmt.Println("polka")
+			//fmt.Println("polka")
 			// There was a polka!
 			// If we're locked but this is a recent polka, unlock.
 			// If it matches our ProposalBlock, update the ValidBlock
@@ -3635,10 +3635,10 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			// Round-skip if there is any 2/3+ of votes ahead of us
 			cs.enterNewRound(height, vote.Round)
 		} else if cs.Round == vote.Round && cstypes.RoundStepPrevote <= cs.Step {
-			fmt.Println("阈值")
+			//fmt.Println("阈值")
 			// current round
 			blockID, ok := prevotes.TwoThirdsMajority()
-			fmt.Println("blockid",blockID)
+			//fmt.Println("blockid",blockID)
 			if ok && (cs.isProposalComplete() || len(blockID.Hash) == 0) {
 				// 这说明已经收到2/3的回执不需要进入等待态了
 				cs.enterPrecommit(height, vote.Round)
@@ -3691,7 +3691,7 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 
 	addr := cs.privValidator.GetPubKey().Address()
 	valIndex, _ := cs.Validators.GetByAddress(addr)
-	fmt.Println("第几个validator投的",valIndex)
+	//fmt.Println("第几个validator投的",valIndex)
 
 	vote := &types.Vote{
 		ValidatorAddress: addr,
@@ -3704,7 +3704,7 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 	}
 
 	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
-	fmt.Println("签名完")
+	//fmt.Println("签名完")
 	return vote, err
 }
 

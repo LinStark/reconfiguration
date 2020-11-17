@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	abci "github.com/tendermint/tendermint/abci/types"
 	cfg "github.com/tendermint/tendermint/config"
 	auto "github.com/tendermint/tendermint/libs/autofile"
@@ -20,16 +19,19 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/types"
 )
+
 //precheckfunc 是一个可选的执行过滤器。如果是false返回，则它在checktx和拒绝交易之前被执行。保证交易没有超过区块大小
 // PreCheckFunc is an optional filter executed before CheckTx and rejects
 // transaction if false is returned. An example would be to ensure that a
 // transaction doesn't exceeded the block size.
 type PreCheckFunc func(types.Tx) error
+
 //postcheckfunc
 // PostCheckFunc is an optional filter executed after CheckTx and rejects
 // transaction if false is returned. An example would be to ensure a
 // transaction doesn't require more gas than available for the block.
 type PostCheckFunc func(types.Tx, *abci.ResponseCheckTx) error
+
 //向mempool添加交易
 // TxInfo are parameters that get passed when attempting to add a tx to the mempool.
 type TxInfo struct {
@@ -113,8 +115,8 @@ func IsPreCheckError(err error) bool {
 	_, ok := err.(ErrPreCheck)
 	return ok
 }
-//错误定义完毕
 
+//错误定义完毕
 
 // PreCheckAminoMaxBytes checks that the size of the transaction plus the amino overhead is smaller or equal to the expected maxBytes.
 func PreCheckAminoMaxBytes(maxBytes int64) PreCheckFunc {
@@ -153,12 +155,14 @@ func PostCheckMaxGas(maxGas int64) PostCheckFunc {
 		return nil
 	}
 }
+
 //以上还是主要对交易的检查
 //交易hash值
 // TxID is the hex encoded hash of the bytes as a types.Tx.
 func TxID(tx []byte) string {
 	return fmt.Sprintf("%X", types.Tx(tx).Hash())
 }
+
 //获取tx的key
 // txKey is the fixed length array sha256 hash used as the key in maps.
 func txKey(tx types.Tx) [sha256.Size]byte {
@@ -171,11 +175,11 @@ func txKey(tx types.Tx) [sha256.Size]byte {
 // can be efficiently accessed by multiple concurrent readers.
 //阅读至此
 type Mempool struct {
-	config *cfg.MempoolConfig//配置文件
-	proxyMtx     sync.Mutex//锁
-	proxyAppConn proxy.AppConnMempool//mempool的应用
-	txs          *clist.CList // concurrent linked-list of good txs链表
-	preCheck     PreCheckFunc//函数
+	config       *cfg.MempoolConfig   //配置文件
+	proxyMtx     sync.Mutex           //锁
+	proxyAppConn proxy.AppConnMempool //mempool的应用
+	txs          *clist.CList         // concurrent linked-list of good txs链表
+	preCheck     PreCheckFunc         //函数
 	postCheck    PostCheckFunc
 	// Track whether we're rechecking txs.
 	// These are not protected by a mutex and are expected to be mutated
@@ -189,7 +193,7 @@ type Mempool struct {
 
 	// Map for quick access to txs to record sender in CheckTx.
 	// txsMap: txKey -> CElement
-	txsMap sync.Map//map
+	txsMap sync.Map //map
 
 	// Atomic integers
 	height     int64 // the last block Update()'d to
@@ -240,6 +244,7 @@ func NewMempool(
 	}
 	return mempool
 }
+
 //初始化功能，tx可用通道初始化
 // EnableTxsAvailable initializes the TxsAvailable channel,
 // ensuring it will trigger once every height when transactions are available.
@@ -324,6 +329,7 @@ func (mem *Mempool) TxsBytes() int64 {
 func (mem *Mempool) FlushAppConn() error {
 	return mem.proxyAppConn.FlushSync()
 }
+
 //将所有交易删除
 // Flush removes all transactions from the mempool and cache
 func (mem *Mempool) Flush() {
@@ -340,6 +346,7 @@ func (mem *Mempool) Flush() {
 	mem.txsMap = sync.Map{}
 	_ = atomic.SwapInt64(&mem.txsBytes, 0)
 }
+
 //返回头指针
 // TxsFront returns the first transaction in the ordered list for peer
 // goroutines to call .NextWait() on.
